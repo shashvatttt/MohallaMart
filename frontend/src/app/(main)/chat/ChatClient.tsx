@@ -1,9 +1,9 @@
 "use client";
 
+
 import { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
-import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatDistanceToNow } from "date-fns";
@@ -26,9 +26,6 @@ export default function ChatClient() {
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const searchParams = useSearchParams();
-  const initUserId = searchParams.get("userId");
-
   useEffect(() => {
     if (user && !socket) {
       connectSocket(user._id);
@@ -42,17 +39,6 @@ export default function ChatClient() {
   useEffect(() => {
     getConversations();
   }, [getConversations]);
-
-  useEffect(() => {
-    if (initUserId && user && initUserId !== user._id) {
-      const existing = conversations.find((c) => c._id === initUserId);
-      if (existing) {
-        setSelectedUser(existing);
-      } else {
-        setSelectedUser({ _id: initUserId, name: "User" });
-      }
-    }
-  }, [initUserId, user, conversations, setSelectedUser]);
 
   useEffect(() => {
     if (selectedUser) {
