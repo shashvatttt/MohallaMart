@@ -49,7 +49,42 @@ const getConversations = async (req, res) => {
     }
 };
 
+// @desc    Get total unread messages count
+// @route   GET /api/chat/unread-count
+// @access  Private
+const getUnreadCount = async (req, res) => {
+    try {
+        const count = await Message.countDocuments({
+            receiver: req.user.id,
+            isRead: false
+        });
+        res.status(200).json({ count });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Mark messages from a specific user as read
+// @route   PUT /api/chat/:userId/read
+// @access  Private
+const markAsRead = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        await Message.updateMany(
+            { sender: userId, receiver: req.user.id, isRead: false },
+            { $set: { isRead: true } }
+        );
+
+        res.status(200).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     getChatHistory,
-    getConversations
+    getConversations,
+    getUnreadCount,
+    markAsRead
 };
