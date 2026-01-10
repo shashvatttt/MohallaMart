@@ -10,18 +10,7 @@ const api = axios.create({
     withCredentials: true,
 });
 
-api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+// Request interceptor not needed as cookies are sent automatically with `withCredentials: true`
 
 api.interceptors.response.use(
     (response) => {
@@ -29,27 +18,22 @@ api.interceptors.response.use(
     },
     async (error) => {
         const originalRequest = error.config;
-        if (error.response.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
             try {
-                const refreshToken = localStorage.getItem('refreshToken');
-                if (!refreshToken) {
-                    // Redirect to login or handle logout
-                    return Promise.reject(error);
-                }
-
-                const res = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+                // Call refresh endpoint - cookie will be sent automatically
+                const res = await axios.post(`${API_URL}/auth/refresh`, {}, { withCredentials: true });
                 if (res.status === 200) {
-                    localStorage.setItem('accessToken', res.data.accessToken);
-                    api.defaults.headers.common['Authorization'] = `Bearer ${res.data.accessToken}`;
+                    // Refresh successful, cookies updated by server response
+                    // Retry original request
                     return api(originalRequest);
                 }
             } catch (err) {
-                // Refresh token failed, logout user
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
-                localStorage.removeItem('user');
-                window.location.href = '/login';
+                // Refresh failed
+                if (typeof window !== 'undefined') {
+                    localStorage.removeItem('user'); // Keep user data sync clear
+                    window.location.href = '/login';
+                }
                 return Promise.reject(err);
             }
         }

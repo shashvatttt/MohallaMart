@@ -1,3 +1,4 @@
+
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
@@ -12,6 +13,49 @@ const generateAccessToken = (id) => {
 const generateRefreshToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
         expiresIn: '7d'
+    });
+};
+
+// Cookie Options
+// Use secure: true in production (implied by requirement 1)
+// Ideally use checking process.env.NODE_ENV === 'production' but user explicitly asked for secure: true
+// However, localhost over HTTP will fail with secure: true.
+// I will use a helper to determine secure flag or default to strict based on user requirement while allowing localhost dev if possible.
+// User req: "Ensure solution works for both development and production".
+// Safe bet: secure: process.env.NODE_ENV === 'production'
+const getCookieOptions = () => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure: isProduction, // secure only in prod to allow localhost testing
+        sameSite: isProduction ? 'none' : 'lax', // none for cross-domain prod, lax for localhost
+        path: '/'
+    };
+};
+
+const sendTokenResponse = (user, statusCode, res) => {
+    const accessToken = generateAccessToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
+
+    const options = getCookieOptions();
+
+    // Access Token Cookie (15 min)
+    res.cookie('accessToken', accessToken, {
+        ...options,
+        maxAge: 15 * 60 * 1000 // 15 mins
+    });
+
+    // Refresh Token Cookie (7 days)
+    res.cookie('refreshToken', refreshToken, {
+        ...options,
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    res.status(statusCode).json({
+        _id: user.id,
+        name: user.name,
+        email: user.email,
+        joinedCommunities: user.joinedCommunities
     });
 };
 
@@ -41,13 +85,7 @@ const registerUser = async (req, res) => {
         });
 
         if (user) {
-            res.status(201).json({
-                _id: user.id,
-                name: user.name,
-                email: user.email,
-                accessToken: generateAccessToken(user.id),
-                refreshToken: generateRefreshToken(user.id)
-            });
+            sendTokenResponse(user, 201, res);
         } else {
             res.status(400).json({ message: 'Invalid user data' });
         }
@@ -68,13 +106,7 @@ const loginUser = async (req, res) => {
         const user = await User.findOne({ email }).select('+password');
 
         if (user && (await user.matchPassword(password))) {
-            res.json({
-                _id: user.id,
-                name: user.name,
-                email: user.email,
-                accessToken: generateAccessToken(user.id),
-                refreshToken: generateRefreshToken(user.id)
-            });
+            sendTokenResponse(user, 200, res);
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -87,7 +119,7 @@ const loginUser = async (req, res) => {
 // @route   POST /api/auth/refresh
 // @access  Public
 const refreshToken = async (req, res) => {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
         return res.status(401).json({ message: 'No refresh token found' });
@@ -96,13 +128,36 @@ const refreshToken = async (req, res) => {
     try {
         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-        // Optionally check if user still exists
-        const token = generateAccessToken(decoded.id);
+        // Verify user exists
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            return res.status(401).json({ message: 'User not found' });
+        }
 
-        res.json({ accessToken: token });
+        const accessToken = generateAccessToken(user.id);
+        const options = getCookieOptions();
+
+        res.cookie('accessToken', accessToken, {
+            ...options,
+            maxAge: 15 * 60 * 1000
+        });
+
+        res.json({ message: 'Token refreshed' });
     } catch (error) {
         res.status(401).json({ message: 'Invalid refresh token' });
     }
+};
+
+// @desc    Logout user / clear cookies
+// @route   POST /api/auth/logout
+// @access  Public
+const logoutUser = async (req, res) => {
+    const options = getCookieOptions();
+
+    res.cookie('accessToken', '', { ...options, maxAge: 0 });
+    res.cookie('refreshToken', '', { ...options, maxAge: 0 });
+
+    res.status(200).json({ message: 'Logged out successfully' });
 };
 
 // @desc    Get user data
@@ -117,5 +172,6 @@ module.exports = {
     registerUser,
     loginUser,
     refreshToken,
+    logoutUser,
     getMe
 };

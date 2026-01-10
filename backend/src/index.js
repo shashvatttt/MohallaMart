@@ -10,6 +10,8 @@ const morgan = require('morgan');
 const { createServer } = require('http');
 const initSocket = require('./sockets/socket');
 
+const cookieParser = require('cookie-parser');
+
 const app = express();
 const httpServer = createServer(app);
 const PORT = Number(process.env.PORT) || 5001;
@@ -18,9 +20,16 @@ const PORT = Number(process.env.PORT) || 5001;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true
+    origin: [
+        'http://localhost:3000',
+        'https://mohallamart.store',
+        'https://www.mohallamart.store'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 app.use(helmet());
 app.use(morgan('dev'));

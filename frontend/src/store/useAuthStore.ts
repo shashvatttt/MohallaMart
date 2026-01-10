@@ -24,30 +24,29 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     login: (userData) => {
         localStorage.setItem('user', JSON.stringify(userData));
-        localStorage.setItem('accessToken', userData.accessToken);
-        localStorage.setItem('refreshToken', userData.refreshToken);
+        // Cookies are set by server
         set({ user: userData, isAuthenticated: true });
     },
 
-    logout: () => {
+    logout: async () => {
+        try {
+            await api.post('/auth/logout');
+        } catch (error) {
+            console.error('Logout error', error);
+        }
         localStorage.removeItem('user');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
         set({ user: null, isAuthenticated: false });
     },
 
     checkAuth: async () => {
         try {
-            const token = localStorage.getItem('accessToken');
-            if (token) {
-                // Optionally verify with backend '/me' endpoint
-                const res = await api.get('/auth/me');
-                set({ user: res.data, isAuthenticated: true, isLoading: false });
-            } else {
-                set({ user: null, isAuthenticated: false, isLoading: false });
-            }
+            // Simply call /me. Middleware will check cookies.
+            const res = await api.get('/auth/me');
+            set({ user: res.data, isAuthenticated: true, isLoading: false });
+            localStorage.setItem('user', JSON.stringify(res.data));
         } catch (error) {
             set({ user: null, isAuthenticated: false, isLoading: false });
+            localStorage.removeItem('user');
         }
     }
 }));
