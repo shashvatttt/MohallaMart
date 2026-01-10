@@ -86,11 +86,7 @@ export default function CreateProductPage() {
         }
 
         try {
-            await api.post('/products', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            await api.post('/products', formData);
             toast.success('Product posted successfully');
             router.push(`/communities/${communityId}`);
         } catch (error: any) {
