@@ -1,8 +1,9 @@
 "use client";
 
+
 import { useState, useEffect } from 'react';
 import api from '@/services/api';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import toast from 'react-hot-toast';
@@ -23,12 +24,17 @@ export default function CreateProductPage() {
     const [loading, setLoading] = useState(false);
 
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const preselectedCommunityId = searchParams.get('communityId');
 
     useEffect(() => {
         const fetchCommunities = async () => {
             try {
+                // Parse communityId from URL manually to avoid useSearchParams build error
+                let preselectedCommunityId = null;
+                if (typeof window !== 'undefined') {
+                    const params = new URLSearchParams(window.location.search);
+                    preselectedCommunityId = params.get('communityId');
+                }
+
                 // Fetch joined communities to populate dropdown
                 // Since we don't have a direct "get my communities" API, we can use /communities and filter on frontend or add endpoint. 
                 // Wait, /communities returns all. We can filter by "members includes me" but the response might not have full member list or be huge.
@@ -53,7 +59,7 @@ export default function CreateProductPage() {
             }
         };
         fetchCommunities();
-    }, [preselectedCommunityId]);
+    }, []);
 
 
     const handleSubmit = async (e: React.FormEvent) => {
