@@ -3,17 +3,26 @@
 import Link from 'next/link';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/Button';
-import { LogOut, Home, ShoppingBag, MessageCircle, PlusCircle, User as UserIcon } from 'lucide-react';
+import { LogOut, Home, MessageCircle, User as UserIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useChatStore } from '@/store/useChatStore';
 
 export default function Navbar() {
     const { user, logout, isAuthenticated, checkAuth } = useAuthStore();
     const [mounted, setMounted] = useState(false);
+    const unreadCount = useChatStore(state => state.unreadCount);
+    const fetchUnread = useChatStore(state => state.fetchUnreadCount);
+    const resetUnread = useChatStore(state => state.resetUnreadCount);
 
     useEffect(() => {
         setMounted(true);
         checkAuth();
-    }, [checkAuth]);
+        fetchUnread();
+    }, [checkAuth, fetchUnread]);
+
+    const handleChatClick = () => {
+        resetUnread();
+    };
 
     if (!mounted) return null;
 
@@ -34,9 +43,14 @@ export default function Navbar() {
                                 <UserIcon className="w-4 h-4 mr-2" />
                                 Communities
                             </Link>
-                            <Link href="/chat" className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                            <Link href="/chat" onClick={handleChatClick} className="relative inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
                                 <MessageCircle className="w-4 h-4 mr-2" />
                                 Chat
+                                {unreadCount > 0 && (
+                                    <span className="absolute -top-1 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full">
+                                        {unreadCount}
+                                    </span>
+                                )}
                             </Link>
                         </div>
                     </div>
