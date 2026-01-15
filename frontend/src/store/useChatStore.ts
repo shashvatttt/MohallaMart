@@ -39,6 +39,7 @@ interface ChatState {
     getConversations: () => Promise<void>;
     getMessages: (userId: string) => Promise<void>;
     fetchUnreadCount: () => Promise<void>;
+    markMessagesAsRead: (userId: string) => Promise<void>;
     sendMessage: (content: string, receiverId: string, senderId: string) => void;
     setSelectedUser: (user: any) => void;
     addMessage: (message: Message) => void;
@@ -205,10 +206,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
     },
 
+    markMessagesAsRead: async (userId) => {
+        const { conversations, unreadCount } = get();
+
+        // Optimistic Update
+        const conversationIndex = conversations.findIndex(c => c._id === userId);
+        if (conversationIndex !== -1) {
+            const conversation = conversations[conversationIndex];
+            const unreadInConversation = conversation.unreadCount || 0;
+
+            if (unreadInConversation > 0) {
+                const newConversations = [...conversations];
+                newConversations[conversationIndex] = { ...conversation, unreadCount: 0 };
+
+                set({
+                    conversations: newConversations,
+                    unreadCount: Math.max(0, unreadCount - unreadInConversation)
+                });
+
+                // API Call
+                try {
+                    await api.put(`/chat/${userId}/read`);
+                } catch (error) {
+                    console.error("Failed to mark messages as read:", error);
+                    // Revert on error if necessary, but for read status it's usually fine to ignore
+                }
+            }
+        }
+    },
+
     setSelectedUser: (user) => {
+        const { markMessagesAsRead } = get();
         set({ selectedUser: user });
         if (user) {
             get().getMessages(user._id);
+            markMessagesAsRead(user._id);
         } else {
             set({ messages: [] });
         }

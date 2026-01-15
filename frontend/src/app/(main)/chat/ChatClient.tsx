@@ -108,16 +108,18 @@ export default function ChatClient() {
                     )}
                   </div>
                   <div className="flex justify-between items-center">
-                    <p className={`text-xs truncate max-w-[120px] ${c.unreadCount && c.unreadCount > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                    <p className={`text-xs truncate max-w-[140px] ${c.unreadCount && c.unreadCount > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                       {c.lastMessage
                         ? (c.lastMessage.sender === user?._id ? `You: ${c.lastMessage.content}` : c.lastMessage.content)
                         : 'Click to chat'}
                     </p>
-                    {c.unreadCount && c.unreadCount > 0 ? (
-                      <span className="h-5 w-5 bg-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm shimmer-effect">
-                        {c.unreadCount}
-                      </span>
-                    ) : null}
+                    {c.unreadCount && c.unreadCount > 0 && (
+                      <div className="flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-blue-600 rounded-full shadow-sm ml-2">
+                        <span className="text-[10px] font-bold text-white leading-none">
+                          {c.unreadCount > 99 ? '99+' : c.unreadCount}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
