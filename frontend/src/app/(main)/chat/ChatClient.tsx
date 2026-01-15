@@ -91,12 +91,34 @@ export default function ChatClient() {
                 className={`cursor-pointer p-4 flex items-center space-x-3 hover:bg-white transition-colors border-b border-gray-100 ${selectedUser?._id === c._id ? "bg-white border-l-4 border-l-blue-500 shadow-sm" : ""
                   }`}
               >
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg flex-shrink-0">
-                  {c.name.charAt(0).toUpperCase()}
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg flex-shrink-0">
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
+                  {/* Online status indicator can go here */}
                 </div>
+
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{c.name}</h3>
-                  <p className="text-xs text-gray-500 truncate">Click to chat</p>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className={`text-sm truncate ${c.unreadCount && c.unreadCount > 0 ? "font-bold text-gray-900" : "font-semibold text-gray-700"}`}>{c.name}</h3>
+                    {c.lastMessage && (
+                      <span className="text-[10px] text-gray-400">
+                        {formatDistanceToNow(new Date(c.lastMessage.createdAt), { addSuffix: false })}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <p className={`text-xs truncate max-w-[120px] ${c.unreadCount && c.unreadCount > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                      {c.lastMessage
+                        ? (c.lastMessage.sender === user?._id ? `You: ${c.lastMessage.content}` : c.lastMessage.content)
+                        : 'Click to chat'}
+                    </p>
+                    {c.unreadCount && c.unreadCount > 0 ? (
+                      <span className="h-5 w-5 bg-blue-600 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm shimmer-effect">
+                        {c.unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ))
@@ -133,8 +155,8 @@ export default function ChatClient() {
                     <div key={i} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[70%] rounded-2xl px-4 py-2 shadow-sm ${isMe
-                            ? "bg-blue-600 text-white rounded-br-none"
-                            : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
+                          ? "bg-blue-600 text-white rounded-br-none"
+                          : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
                           }`}
                       >
                         <p className="text-sm">{m.content}</p>

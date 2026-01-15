@@ -36,7 +36,7 @@ const initSocket = (server) => {
         });
 
         socket.on("sendMessage", async (data) => {
-            const { senderId, receiverId, content } = data;
+            const { senderId, receiverId, content, tempId } = data;
 
             // Basic validation
             if (!senderId || !receiverId || !content?.trim()) {
@@ -62,24 +62,28 @@ const initSocket = (server) => {
                     throw new Error("Failed to populate message");
                 }
 
+                const responseData = {
+                    ...populatedMessage.toObject(),
+                    tempId // Echo back the tempId so frontend can replace the optimistic message
+                };
+
                 // 2. Emit to receiver if online
                 const receiverSocketId = userSockets.get(receiverId);
                 if (receiverSocketId) {
-                    io.to(receiverSocketId).emit("receiveMessage", populatedMessage);
+                    io.to(receiverSocketId).emit("receiveMessage", responseData);
                 }
 
-                // 3. Emit back to sender to confirm receipt and update UI (if they have multiple tabs open)
+                // 3. Emit back to sender to confirm receipt and update UI
                 const senderSocketId = userSockets.get(senderId);
-                // Always emit back to the socket that sent it, PLUS any other sockets the sender might have
-                socket.emit("receiveMessage", populatedMessage);
+                socket.emit("receiveMessage", responseData);
 
                 if (senderSocketId && senderSocketId !== socket.id) {
-                    io.to(senderSocketId).emit("receiveMessage", populatedMessage);
+                    io.to(senderSocketId).emit("receiveMessage", responseData);
                 }
 
             } catch (error) {
                 console.error("Socket error saving message:", error);
-                socket.emit("messageError", { error: "Failed to send message: " + error.message });
+                socket.emit("messageError", { error: "Failed to send message: " + error.message, tempId });
             }
         });
 

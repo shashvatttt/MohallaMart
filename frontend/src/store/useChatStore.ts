@@ -8,12 +8,25 @@ interface Message {
     receiver: { _id: string; name: string };
     content: string;
     createdAt: string;
+    tempId?: string; // For deduplication
+}
+
+interface Conversation {
+    _id: string;
+    name: string;
+    email?: string;
+    unreadCount?: number;
+    lastMessage?: {
+        content: string;
+        createdAt: string;
+        sender: string; // ID only
+    };
 }
 
 interface ChatState {
     socket: Socket | null;
     messages: Message[];
-    conversations: any[];
+    conversations: Conversation[];
     selectedUser: any | null;
     onlineUsers: string[];
     isConnecting: boolean;
@@ -82,13 +95,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
             if (isRelevant) {
                 // Check if message already exists (e.g. from optimistic update)
-                const exists = messages.some(m => m._id === message._id || (m.createdAt === message.createdAt && m.content === message.content && m.sender._id === message.sender._id));
+                // We use tempId if available, OR fall back to exact content/time match
+                const exists = messages.some(m =>
+                    (message.tempId && m.tempId === message.tempId) ||
+                    (m._id === message._id)
+                );
 
                 if (exists) {
                     // Update the optimistic message with the real one from DB (to get the real _id)
                     set({
                         messages: messages.map(m =>
-                            (m._id === message._id || (m.createdAt === message.createdAt && m.content === message.content && m.sender._id === message.sender._id))
+                            (message.tempId && m.tempId === message.tempId) || (m._id === message._id)
                                 ? message
                                 : m
                         )
@@ -98,7 +115,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 }
             } else {
                 // Increment unread count for messages not in current chat
-                set({ unreadCount: unreadCount + 1 });
+                // Also update the specific conversation's unread count
+                set(state => ({
+                    unreadCount: state.unreadCount + 1,
+                    conversations: state.conversations.map(c =>
+                        c._id === message.sender._id
+                            ? { ...c, unreadCount: (c.unreadCount || 0) + 1, lastMessage: { content: message.content, createdAt: message.createdAt, sender: message.sender._id } }
+                            : c
+                    )
+                }));
             }
 
             // Refresh conversations list to update previews
@@ -157,12 +182,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const { socket, selectedUser, messages } = get();
         if (socket) {
             // Optimistic Update
+            const tempId = `temp-${Date.now()}`;
             const optimisticMessage: Message = {
-                _id: `temp-${Date.now()}`,
+                _id: tempId, // Use tempId as _id initially
                 sender: { _id: senderId, name: 'Me' }, // Name will be updated on sync
                 receiver: { _id: receiverId, name: selectedUser?.name || 'User' },
                 content,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                tempId
             };
 
             if (selectedUser && selectedUser._id === receiverId) {
@@ -172,7 +199,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             socket.emit("sendMessage", {
                 senderId,
                 receiverId,
-                content
+                content,
+                tempId
             });
         }
     },
