@@ -44,17 +44,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     connectSocket: (userId) => {
         const { socket, isConnecting } = get();
-        if (socket?.connected || isConnecting) return;
+        // Ensure we disconnect existing socket if user is different or just to be safe
+        if (socket) {
+            if (socket.connected) {
+                // If it's the same user, we might not need to reconnect, but let's be safe for now
+                // socket.disconnect(); 
+            }
+        }
 
         set({ isConnecting: true });
 
-        const newSocket = io(process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001', {
+        // Robust URL construction
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+        console.log(`Connecting to socket at: ${baseUrl} for user: ${userId}`);
+
+        const newSocket = io(baseUrl, {
             withCredentials: true,
             reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
+            transports: ['websocket', 'polling'] // Force websocket first but allow polling
         });
 
         newSocket.on('connect', () => {
-            console.log("Socket connected");
+            console.log("Socket connected successfully:", newSocket.id);
             newSocket.emit('join', userId);
             set({ isConnecting: false });
         });
@@ -64,11 +77,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
             // If viewing chat with sender OR receiver (me), append message
             const isRelevant = selectedUser &&
-                (message.sender._id === selectedUser._id || message.receiver._id === selectedUser._id);
+                (message.sender._id.toString() === selectedUser._id.toString() ||
+                    message.receiver._id.toString() === selectedUser._id.toString());
 
             if (isRelevant) {
-                const exists = messages.some(m => m._id === message._id);
-                if (!exists) {
+                // Check if message already exists (e.g. from optimistic update)
+                const exists = messages.some(m => m._id === message._id || (m.createdAt === message.createdAt && m.content === message.content && m.sender._id === message.sender._id));
+
+                if (exists) {
+                    // Update the optimistic message with the real one from DB (to get the real _id)
+                    set({
+                        messages: messages.map(m =>
+                            (m._id === message._id || (m.createdAt === message.createdAt && m.content === message.content && m.sender._id === message.sender._id))
+                                ? message
+                                : m
+                        )
+                    });
+                } else {
                     set({ messages: [...messages, message] });
                 }
             } else {
@@ -79,9 +104,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             // Refresh conversations list to update previews
             getConversations();
         });
+
+        newSocket.on('messageError', (data: { error: string }) => {
+            console.error("Message send error:", data.error);
+            // Optionally, we could remove the optimistic message here if we had a way to identify it
+        });
+
         // Handle connection errors
         newSocket.on('connect_error', (err) => {
-            console.error("Socket connection error:", err);
+            console.error("Socket connection error details:", err.message);
             set({ isConnecting: false });
         });
 
@@ -123,15 +154,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     sendMessage: (content, receiverId, senderId) => {
-        const { socket } = get();
+        const { socket, selectedUser, messages } = get();
         if (socket) {
+            // Optimistic Update
+            const optimisticMessage: Message = {
+                _id: `temp-${Date.now()}`,
+                sender: { _id: senderId, name: 'Me' }, // Name will be updated on sync
+                receiver: { _id: receiverId, name: selectedUser?.name || 'User' },
+                content,
+                createdAt: new Date().toISOString()
+            };
+
+            if (selectedUser && selectedUser._id === receiverId) {
+                set({ messages: [...messages, optimisticMessage] });
+            }
+
             socket.emit("sendMessage", {
                 senderId,
                 receiverId,
                 content
             });
-            // We rely on the socket "receiveMessage" event to update the UI even for our own messages
-            // This ensures state consistency. 
         }
     },
 

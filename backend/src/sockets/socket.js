@@ -3,8 +3,12 @@ const Message = require('../models/Message');
 
 const socketParams = {
     cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:3000",
-        methods: ["GET", "POST"],
+        origin: [
+            "http://localhost:3000",
+            "https://mohallamart.store",
+            "https://www.mohallamart.store"
+        ],
+        methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     }
 };
@@ -34,18 +38,29 @@ const initSocket = (server) => {
         socket.on("sendMessage", async (data) => {
             const { senderId, receiverId, content } = data;
 
+            // Basic validation
+            if (!senderId || !receiverId || !content?.trim()) {
+                console.error("Invalid message data received:", data);
+                socket.emit("messageError", { error: "Sender, receiver, and content are required" });
+                return;
+            }
+
             try {
                 // 1. Save to DB first to ensure persistence
                 const newMessage = await Message.create({
                     sender: senderId,
                     receiver: receiverId,
-                    content
+                    content: content.trim()
                 });
 
-                const populatedMessage = await newMessage.populate([
-                    { path: 'sender', select: 'name' },
-                    { path: 'receiver', select: 'name' }
+                const populatedMessage = await Message.findById(newMessage._id).populate([
+                    { path: 'sender', select: '_id name' },
+                    { path: 'receiver', select: '_id name' }
                 ]);
+
+                if (!populatedMessage) {
+                    throw new Error("Failed to populate message");
+                }
 
                 // 2. Emit to receiver if online
                 const receiverSocketId = userSockets.get(receiverId);
@@ -55,16 +70,16 @@ const initSocket = (server) => {
 
                 // 3. Emit back to sender to confirm receipt and update UI (if they have multiple tabs open)
                 const senderSocketId = userSockets.get(senderId);
-                if (senderSocketId) {
-                    io.to(senderSocketId).emit("receiveMessage", populatedMessage); // treating it same as receive for simplicity in store
-                } else {
-                    // Fallback if sender socket ID lost (rare but possible during reconnects)
-                    socket.emit("receiveMessage", populatedMessage);
+                // Always emit back to the socket that sent it, PLUS any other sockets the sender might have
+                socket.emit("receiveMessage", populatedMessage);
+
+                if (senderSocketId && senderSocketId !== socket.id) {
+                    io.to(senderSocketId).emit("receiveMessage", populatedMessage);
                 }
 
             } catch (error) {
                 console.error("Socket error saving message:", error);
-                socket.emit("messageError", { error: "Failed to send message" });
+                socket.emit("messageError", { error: "Failed to send message: " + error.message });
             }
         });
 

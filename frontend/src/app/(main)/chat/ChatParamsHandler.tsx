@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 export default function ChatParamsHandler() {
     const { user } = useAuthStore();
-    const { conversations, setSelectedUser } = useChatStore();
+    const { conversations, setSelectedUser, selectedUser } = useChatStore();
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -16,15 +16,19 @@ export default function ChatParamsHandler() {
             const initUserId = params.get("userId");
 
             if (initUserId && user && initUserId !== user._id) {
-                const existing = conversations.find((c) => c._id === initUserId);
-                if (existing) {
-                    setSelectedUser(existing);
-                } else {
-                    setSelectedUser({ _id: initUserId, name: "User" });
+                // Only set if not already selected to avoid infinite fetch loops or redundant refreshes
+                if (selectedUser?._id !== initUserId) {
+                    const existing = conversations.find((c) => c._id === initUserId);
+                    if (existing) {
+                        setSelectedUser(existing);
+                    } else if (conversations.length > 0 || initUserId) {
+                        // If conversations loaded but user not found, or it's a first-time message
+                        setSelectedUser({ _id: initUserId, name: "User" });
+                    }
                 }
             }
         }
-    }, [user, conversations, setSelectedUser]);
+    }, [user, conversations, setSelectedUser, selectedUser]);
 
     return null;
 }
